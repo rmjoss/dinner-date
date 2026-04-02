@@ -1,0 +1,1442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DinnerDate · Group Dinner Scheduler</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    :root {
+      --rust:        #c2410c;
+      --rust-hover:  #a83509;
+      --amber:       #d97706;
+      --amber-light: #fef3c7;
+      --amber-mid:   #fde68a;
+      --amber-dark:  #92400e;
+      --green:       #15803d;
+      --green-bg:    #dcfce7;
+      --yellow:      #a16207;
+      --yellow-bg:   #fef9c3;
+      --red:         #b91c1c;
+      --red-bg:      #fee2e2;
+      --gray:        #6b7280;
+      --gray-bg:     #f3f4f6;
+      --border:      #e5e7eb;
+      --text:        #1f2937;
+      --muted:       #6b7280;
+      --bg:          #fffbf5;
+      --card:        #ffffff;
+      --radius:      14px;
+      --shadow:      0 2px 16px rgba(0,0,0,0.08);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100vh; -webkit-font-smoothing: antialiased;
+    }
+    #root { min-height: 100vh; }
+
+    /* ── Layout ─────────────────────────────────── */
+    .page      { max-width: 660px; margin: 0 auto; padding: 24px 16px 80px; }
+    .page-wide { max-width: 960px; margin: 0 auto; padding: 24px 16px 80px; }
+    .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 26px 24px; margin-bottom: 16px; }
+    .card-sm { padding: 16px 20px; }
+    .card-flat { box-shadow: none; border: 1.5px solid var(--border); }
+
+    /* ── Header ─────────────────────────────────── */
+    .hdr { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; cursor: pointer; width: fit-content; }
+    .hdr-logo { font-size: 26px; }
+    .hdr-name { font-size: 21px; font-weight: 700; color: var(--rust); letter-spacing: -.3px; }
+    .hdr-tag  { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+    /* ── Type ───────────────────────────────────── */
+    h1 { font-size: 25px; font-weight: 700; letter-spacing: -.4px; line-height: 1.2; }
+    h2 { font-size: 18px; font-weight: 600; }
+    h3 { font-size: 15px; font-weight: 600; }
+    p  { line-height: 1.6; color: var(--muted); }
+    .lead { font-size: 16px; color: var(--muted); margin-top: 6px; }
+    .label { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 5px; display: block; }
+    .hint  { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+    .muted { color: var(--muted); }
+
+    /* ── Inputs ─────────────────────────────────── */
+    input[type=text], input[type=date], input[type=url], textarea, select {
+      width: 100%; padding: 10px 13px;
+      border: 1.5px solid var(--border); border-radius: 9px;
+      font-size: 15px; font-family: inherit; color: var(--text);
+      background: #fff; outline: none; transition: border-color .15s;
+    }
+    input:focus, textarea:focus { border-color: var(--amber); box-shadow: 0 0 0 3px rgba(217,119,6,.12); }
+    input.err { border-color: var(--red); }
+    textarea { resize: vertical; min-height: 70px; }
+    .field { margin-bottom: 16px; }
+    .err-msg { font-size: 12px; color: var(--red); margin-top: 4px; }
+
+    /* ── Buttons ─────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 10px 20px; border: none; border-radius: 9px;
+      font-size: 15px; font-weight: 600; font-family: inherit;
+      cursor: pointer; transition: all .15s; white-space: nowrap;
+    }
+    .btn-primary { background: var(--rust); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--rust-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(194,65,12,.3); }
+    .btn-amber { background: var(--amber); color: #fff; }
+    .btn-amber:hover:not(:disabled) { background: #b45309; }
+    .btn-secondary { background: var(--amber-light); color: var(--amber-dark); border: 1.5px solid var(--amber-mid); }
+    .btn-secondary:hover:not(:disabled) { background: var(--amber-mid); }
+    .btn-ghost { background: transparent; color: var(--muted); border: 1.5px solid var(--border); }
+    .btn-ghost:hover:not(:disabled) { background: var(--gray-bg); color: var(--text); }
+    .btn-success { background: #16a34a; color: #fff; }
+    .btn-success:hover:not(:disabled) { background: var(--green); }
+    .btn-danger { background: var(--red-bg); color: var(--red); border: 1.5px solid #fca5a5; }
+    .btn-sm  { padding: 7px 14px; font-size: 13px; border-radius: 7px; }
+    .btn-lg  { padding: 14px 26px; font-size: 16px; }
+    .btn-full { width: 100%; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+    .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn-row .btn { flex: 1; min-width: 120px; }
+
+    /* ── Availability buttons ─────────────────────── */
+    .av-btn {
+      padding: 8px 14px; border-radius: 7px; border: 1.5px solid;
+      font-size: 13px; font-weight: 600; cursor: pointer; transition: all .12s; background: transparent;
+    }
+    .av-yes   { border-color: #86efac; color: var(--green); }
+    .av-yes.on, .av-yes:hover   { background: var(--green-bg); border-color: var(--green); }
+    .av-maybe { border-color: #fde047; color: var(--yellow); }
+    .av-maybe.on, .av-maybe:hover { background: var(--yellow-bg); border-color: var(--yellow); }
+    .av-no    { border-color: #fca5a5; color: var(--red); }
+    .av-no.on, .av-no:hover    { background: var(--red-bg); border-color: var(--red); }
+
+    /* ── Badges ─────────────────────────────────── */
+    .badge {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 3px 9px; border-radius: 20px;
+      font-size: 12px; font-weight: 600;
+    }
+    .bg-green  { background: var(--green-bg);  color: var(--green); }
+    .bg-yellow { background: var(--yellow-bg); color: var(--yellow); }
+    .bg-red    { background: var(--red-bg);    color: var(--red); }
+    .bg-gray   { background: var(--gray-bg);   color: var(--gray); }
+    .bg-amber  { background: var(--amber-light); color: var(--amber-dark); }
+
+    /* ── Steps ──────────────────────────────────── */
+    .steps { display: flex; align-items: center; gap: 8px; margin-bottom: 22px; }
+    .sdot {
+      width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700;
+    }
+    .sdot-done    { background: var(--green); color: #fff; }
+    .sdot-active  { background: var(--rust);  color: #fff; }
+    .sdot-pending { background: var(--gray-bg); color: var(--muted); }
+    .sline { flex: 1; height: 2px; background: var(--border); border-radius: 2px; }
+    .sline-done { background: var(--green); }
+
+    /* ── Date chips ─────────────────────────────── */
+    .date-chip {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--amber-light); border: 1.5px solid var(--amber-mid);
+      border-radius: 8px; padding: 8px 12px;
+      font-size: 14px; font-weight: 500; color: var(--amber-dark);
+    }
+    .date-chip .rm { background: none; border: none; cursor: pointer; color: var(--amber); font-size: 15px; line-height: 1; padding: 0; margin-left: auto; }
+    .date-chip .rm:hover { color: var(--rust); }
+    .date-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; min-height: 10px; }
+
+    /* ── Link box ───────────────────────────────── */
+    .link-box {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--gray-bg); border-radius: 9px; padding: 10px 14px;
+    }
+    .link-box span { flex: 1; font-size: 13px; color: var(--muted); word-break: break-all; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+    /* ── Results grid ───────────────────────────── */
+    .grid-wrap { overflow-x: auto; margin: 0 -4px; }
+    .rg { border-collapse: collapse; min-width: 100%; }
+    .rg th, .rg td { padding: 0; border: 1px solid var(--border); text-align: center; min-width: 88px; }
+    .rg th { background: var(--amber-light); font-size: 13px; font-weight: 600; color: var(--amber-dark); }
+    .rg-couple { font-size: 13px; font-weight: 500; text-align: left !important; padding: 10px 14px !important; min-width: 140px; }
+    .rg-dh { padding: 10px 8px !important; line-height: 1.3; }
+    .rg-sub { font-size: 11px; font-weight: 400; color: var(--muted); }
+    .cy  { background: var(--green-bg);  color: var(--green);  font-weight: 700; padding: 10px 8px !important; }
+    .cm  { background: var(--yellow-bg); color: var(--yellow); font-weight: 700; padding: 10px 8px !important; }
+    .cn  { background: var(--red-bg);    color: var(--red);    font-weight: 700; padding: 10px 8px !important; }
+    .c0  { background: var(--gray-bg);   color: var(--muted);  padding: 10px 8px !important; }
+    .cell-note { font-size: 10px; font-weight: 400; opacity: .8; display: block; margin-top: 2px; }
+    .col-best th { background: var(--green-bg) !important; border-top: 3px solid var(--green) !important; }
+    .col-best td { border-left: 2px solid #86efac; border-right: 2px solid #86efac; }
+
+    /* ── Score bar ──────────────────────────────── */
+    .sc-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .sc-row:last-child { border-bottom: none; }
+    .sc-date { flex: 0 0 116px; font-size: 14px; font-weight: 500; }
+    .sc-bar-wrap { flex: 1; height: 13px; background: var(--gray-bg); border-radius: 7px; overflow: hidden; }
+    .sc-bar { height: 100%; border-radius: 7px; transition: width .5s ease; }
+    .sc-full    { background: var(--green); }
+    .sc-partial { background: var(--amber); }
+    .sc-low     { background: #f87171; }
+    .sc-nums { font-size: 12px; color: var(--muted); flex: 0 0 80px; text-align: right; }
+
+    /* ── Finalize cards ─────────────────────────── */
+    .fdc { border: 2px solid var(--border); border-radius: 10px; padding: 14px 16px; cursor: pointer; transition: all .15s; margin-bottom: 10px; display: flex; align-items: center; gap: 14px; }
+    .fdc:hover { border-color: var(--rust); background: #fff7f5; }
+    .fdc.sel  { border-color: var(--green); background: var(--green-bg); }
+    .fdc-radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all .12s; }
+    .fdc.sel .fdc-radio { border-color: var(--green); background: var(--green); }
+    .fdc-dot { width: 8px; height: 8px; border-radius: 50%; background: #fff; }
+    .fdc-info { flex: 1; }
+    .fdc-date { font-size: 15px; font-weight: 600; }
+    .fdc-score { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+    /* ── Summary cards ──────────────────────────── */
+    .sum-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .sum-card { border-radius: var(--radius); padding: 16px 18px; }
+
+    /* ── Landing ────────────────────────────────── */
+    .hero { text-align: center; padding: 36px 20px 28px; }
+    .hero-icon { font-size: 60px; margin-bottom: 14px; }
+    .choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 24px; }
+    @media (max-width: 480px) { .choice-grid { grid-template-columns: 1fr; } }
+    .choice-card { background: var(--card); border-radius: var(--radius); border: 2px solid var(--border); padding: 22px 16px; text-align: center; cursor: pointer; transition: all .15s; }
+    .choice-card:hover { border-color: var(--rust); box-shadow: var(--shadow); transform: translateY(-2px); }
+    .choice-icon { font-size: 34px; margin-bottom: 8px; }
+
+    /* ── Setup screen ───────────────────────────── */
+    .setup-step { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 20px; }
+    .setup-num { width: 28px; height: 28px; border-radius: 50%; background: var(--amber-light); color: var(--amber-dark); font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+    .setup-step p { font-size: 14px; margin-top: 4px; color: var(--text); }
+    .setup-step a { color: var(--rust); text-decoration: none; font-weight: 500; }
+    .setup-step a:hover { text-decoration: underline; }
+    .setup-step code { background: var(--gray-bg); padding: 1px 6px; border-radius: 4px; font-size: 13px; font-family: monospace; color: var(--text); }
+
+    /* ── Misc ────────────────────────────────────── */
+    .divider  { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+    .icon-big { font-size: 48px; margin-bottom: 10px; display: block; }
+    .tc   { text-align: center; }
+    .flex { display: flex; }
+    .aic  { align-items: center; }
+    .gap2 { gap: 8px; }
+    .gap3 { gap: 12px; }
+    .wrap { flex-wrap: wrap; }
+    .grow { flex: 1; }
+    .mt2 { margin-top: 8px; }
+    .mt4 { margin-top: 16px; }
+    .mb2 { margin-bottom: 8px; }
+    .mb4 { margin-bottom: 16px; }
+    .poll-meta { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; }
+    .pm-item { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
+
+/* ── Spinner ─────────────────────────────────── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--rust); border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto; }
+    .loading-center { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0; gap: 14px; }
+
+    /* ── Toast ───────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: #1f2937; color: #fff; padding: 10px 20px;
+      border-radius: 24px; font-size: 14px; font-weight: 500;
+      pointer-events: none; opacity: 0; transition: opacity .2s; z-index: 9999; white-space: nowrap;
+    }
+    .toast.on { opacity: 1; }
+
+    /* ── Live dot ────────────────────────────────── */
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 1.8s ease-in-out infinite; }
+
+    @media (max-width: 600px) { .card { padding: 18px 14px; } h1 { font-size: 21px; } }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<div class="toast" id="toast"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+/* ============================================================
+   FIREBASE REST HELPERS
+   ============================================================ */
+// Firebase database URL — hardcoded so no setup is needed
+const FIREBASE_URL = 'https://dinner-group-3156d-default-rtdb.firebaseio.com';
+
+function getFirebaseUrl() { return FIREBASE_URL; }
+function setFirebaseUrl()  { /* no-op: URL is hardcoded */ }
+
+async function fbGet(path) {
+  const base = getFirebaseUrl();
+  if (!base) throw new Error('No Firebase URL configured');
+  const r = await fetch(`${base}/${path}.json`, { cache: 'no-store' });
+  if (!r.ok) throw new Error(`Firebase error ${r.status}`);
+  return r.json();
+}
+async function fbSet(path, data) {
+  const base = getFirebaseUrl();
+  const r = await fetch(`${base}/${path}.json`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  if (!r.ok) throw new Error(`Firebase error ${r.status}`);
+  return r.json();
+}
+async function fbPatch(path, data) {
+  const base = getFirebaseUrl();
+  const r = await fetch(`${base}/${path}.json`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  if (!r.ok) throw new Error(`Firebase error ${r.status}`);
+  return r.json();
+}
+async function fbPush(path, data) {
+  const base = getFirebaseUrl();
+  const r = await fetch(`${base}/${path}.json`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  if (!r.ok) throw new Error(`Firebase error ${r.status}`);
+  return r.json(); // { name: "autoId" }
+}
+async function fbDelete(path) {
+  const base = getFirebaseUrl();
+  const r = await fetch(`${base}/${path}.json`, { method: 'DELETE', cache: 'no-store' });
+  if (!r.ok) throw new Error(`Firebase error ${r.status}`);
+}
+
+/* ── Organizer ID ─────────────────────────────────────────── */
+function getOrCreateOrgId() {
+  let oid = localStorage.getItem('dinnerOrgId');
+  if (!oid) { oid = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2); localStorage.setItem('dinnerOrgId', oid); }
+  return oid;
+}
+function makeDashboardUrl(oid) {
+  return `${pageBase()}#dashboard/${oid}/${encDb(getFirebaseUrl())}`;
+}
+
+/* ============================================================
+   UTILITIES
+   ============================================================ */
+function uid() { return Math.random().toString(36).slice(2, 9); }
+
+function fmtShort(d) {
+  if (!d) return '';
+  return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+function fmtFull(d) {
+  if (!d) return '';
+  return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+}
+function fmtMonthDay(d) {
+  if (!d) return '';
+  return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+function today() { return new Date().toISOString().slice(0, 10); }
+
+function slugify(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').slice(0, 40);
+}
+
+function analyzeDates(dates, responses) {
+  const n = responses.length;
+  return dates.map(date => {
+    let yes = 0, maybe = 0, no = 0, none = 0;
+    responses.forEach(r => {
+      const v = r.availability?.[date];
+      if (v === 'yes') yes++;
+      else if (v === 'maybe') maybe++;
+      else if (v === 'no') no++;
+      else none++;
+    });
+    const score = yes * 3 + maybe;
+    return { date, yes, maybe, no, none, score, n };
+  });
+}
+
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('on');
+  setTimeout(() => el.classList.remove('on'), 2200);
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); showToast('Copied to clipboard!'); }
+  catch { showToast('Select and copy the link manually'); }
+}
+
+// Encode/decode Firebase URL compactly for embedding in share links
+function encDb(url) { try { return btoa(url); } catch { return ''; } }
+function decDb(s)   { try { return atob(s);  } catch { return ''; } }
+
+// Base URL of this page (strip hash)
+function pageBase() { return window.location.href.split('#')[0]; }
+
+function makeRespondUrl(pollId) {
+  const db = encDb(getFirebaseUrl());
+  return `${pageBase()}#${pollId}/respond/${db}`;
+}
+function makeResultsUrl(pollId) {
+  const db = encDb(getFirebaseUrl());
+  return `${pageBase()}#${pollId}/results/${db}`;
+}
+function makeOrganizerUrl(pollId) {
+  const db = encDb(getFirebaseUrl());
+  return `${pageBase()}#${pollId}/organize/${db}`;
+}
+
+/* ============================================================
+   PARSE URL
+   ============================================================ */
+function parseHash() {
+  const h = window.location.hash.slice(1);
+  if (!h) return { pollId: null, role: null, dbUrl: null, dashboardOrgId: null };
+  const parts = h.split('/');
+  // Dashboard link: #dashboard/{orgId}/{dbUrl}
+  if (parts[0] === 'dashboard') {
+    const dashboardOrgId = parts[1] || null;
+    const dbUrl = parts[2] ? decDb(parts[2]) : null;
+    if (dbUrl) setFirebaseUrl(dbUrl);
+    return { pollId: null, role: null, dbUrl, dashboardOrgId };
+  }
+  const pollId = parts[0] || null;
+  const role   = parts[1] || 'respond';
+  const dbUrl  = parts[2] ? decDb(parts[2]) : null;
+  if (dbUrl) setFirebaseUrl(dbUrl);
+  return { pollId, role, dbUrl, dashboardOrgId: null };
+}
+
+/* ============================================================
+   APP ROOT
+   ============================================================ */
+function App() {
+  const [view, setView]         = useState('boot');
+  const [pollId, setPollId]     = useState(null);
+  const [role, setRole]         = useState('respond');
+  const [pollData, setPollData] = useState(null);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState(null);
+  const [orgId, setOrgId]       = useState(null);
+  const [orgPolls, setOrgPolls] = useState([]);
+  const [newPollId, setNewPollId] = useState(null);
+
+  // On mount: read URL hash, init organizer ID, load poll or dashboard
+  useEffect(() => {
+    const { pollId: pid, role: r, dashboardOrgId } = parseHash();
+    // Resolve organizer ID: from dashboard link, then localStorage, then generate
+    let oid = dashboardOrgId || localStorage.getItem('dinnerOrgId');
+    if (!oid) { oid = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2); }
+    localStorage.setItem('dinnerOrgId', oid);
+    setOrgId(oid);
+    loadOrgPolls(oid);
+    if (pid) { setPollId(pid); setRole(r); loadPoll(pid, r); }
+    else { setView('landing'); }
+  }, []);
+
+  async function loadOrgPolls(oid) {
+    try {
+      const data = await fbGet(`organizers/${oid}/polls`);
+      if (data) {
+        const list = Object.values(data).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        setOrgPolls(list);
+      }
+    } catch {}
+  }
+
+  async function removeOrgPoll(oid, pid) {
+    try {
+      await fbDelete(`organizers/${oid}/polls/${pid}`);
+      setOrgPolls(prev => prev.filter(p => p.pollId !== pid));
+    } catch {}
+  }
+
+  // Auto-refresh on results page every 8 seconds; also fires immediately on entry
+  useEffect(() => {
+    if ((view === 'results' || view === 'finalized') && pollId) {
+      refreshPoll(pollId);
+      const timer = setInterval(() => refreshPoll(pollId), 8000);
+      return () => clearInterval(timer);
+    }
+  }, [view, pollId]);
+
+  async function loadPoll(pid, r) {
+    setLoading(true); setError(null);
+    try {
+      const data = await fbGet(`polls/${pid}`);
+      if (!data || !data.poll) { setError('Poll not found. Check the link and try again.'); setView('error'); setLoading(false); return; }
+      setPollData(data);
+      if (r === 'organize') setView('results');
+      else if (r === 'results') setView('results');
+      else setView('respond');
+    } catch (e) {
+      setError('Could not connect to the database. Check your Firebase URL in Settings, or check your internet connection.');
+      setView('error');
+    }
+    setLoading(false);
+  }
+
+  async function refreshPoll(pid) {
+    try {
+      const data = await fbGet(`polls/${pid}`);
+      if (data && data.poll) setPollData(data);
+    } catch {}
+  }
+
+  async function createPoll(pollInfo) {
+    setLoading(true); setError(null);
+    try {
+      const pid = uid();
+      const pollRecord = {
+        poll: { ...pollInfo, id: pid, finalDate: null, closed: false, createdAt: today() },
+        responses: {}
+      };
+      await fbSet(`polls/${pid}`, pollRecord);
+      // Save to organizer's index in Firebase
+      const oid = orgId || localStorage.getItem('dinnerOrgId');
+      if (oid) {
+        await fbSet(`organizers/${oid}/polls/${pid}`, {
+          pollId: pid, title: pollInfo.title, createdAt: today(), finalDate: null
+        });
+        setOrgPolls(prev => [{ pollId: pid, title: pollInfo.title, createdAt: today(), finalDate: null }, ...prev]);
+      }
+      setPollId(pid);
+      setPollData(pollRecord);
+      setRole('organizer');
+      window.location.hash = `${pid}/organize`;
+      setNewPollId(pid);
+      setView('landing');
+    } catch (e) {
+      setError('Could not save poll. ' + e.message);
+      setView('error');
+    }
+    setLoading(false);
+  }
+
+  async function submitResponse(couple, availability, notes) {
+    setLoading(true); setError(null);
+    try {
+      const key = slugify(couple);
+      const resp = { couple, availability, notes, respondedAt: today() };
+      await fbPatch(`polls/${pollId}/responses`, { [key]: resp });
+      // Reload fresh data
+      const data = await fbGet(`polls/${pollId}`);
+      setPollData(data);
+      setView('confirmed');
+    } catch (e) {
+      setError('Could not save your response. ' + e.message);
+      setView('error');
+    }
+    setLoading(false);
+  }
+
+  async function finalizePoll(finalDate) {
+    setLoading(true);
+    try {
+      await fbPatch(`polls/${pollId}/poll`, { finalDate, closed: true });
+      const data = await fbGet(`polls/${pollId}`);
+      setPollData(data);
+      // Update organizer index with confirmed date
+      const oid = orgId || localStorage.getItem('dinnerOrgId');
+      if (oid && pollId) {
+        await fbPatch(`organizers/${oid}/polls/${pollId}`, { finalDate });
+        setOrgPolls(prev => prev.map(p => p.pollId === pollId ? { ...p, finalDate } : p));
+      }
+      // stay on 'finalize' view; component will detect poll.finalDate and show confirmation
+    } catch (e) {
+      setError('Could not finalize poll. ' + e.message);
+    }
+    setLoading(false);
+  }
+
+  const responses = pollData?.responses ? Object.values(pollData.responses) : [];
+
+  if (loading && !pollData) return (
+    <div className="page"><Header /><div className="loading-center"><div className="spinner" /><p>Loading…</p></div></div>
+  );
+
+  switch (view) {
+    case 'boot':      return <div className="page"><Header /><div className="loading-center"><div className="spinner" /></div></div>;
+    case 'landing':   return <LandingView onCreateNew={() => setView('create')} orgId={orgId} orgPolls={orgPolls} onRemovePoll={(pid) => removeOrgPoll(orgId, pid)} newPollId={newPollId} onViewResults={(pid) => { setPollId(pid); setRole('organize'); loadPoll(pid, 'organize'); setNewPollId(null); }} />;
+    case 'create':    return <CreateView onSubmit={createPoll} onBack={() => setView('landing')} loading={loading} />;
+    case 'respond':   return <RespondView poll={pollData?.poll} responses={responses} onSubmit={submitResponse} loading={loading} role={role} onViewResults={() => setView('results')} />;
+    case 'confirmed': return <ConfirmedView poll={pollData?.poll} pollId={pollId} onViewResults={() => { window.location.hash = `${pollId}/results`; setView('results'); }} />;
+    case 'results':   return <ResultsView poll={pollData?.poll} responses={responses} role={role} pollId={pollId} onFinalize={() => setView('finalize')} onRefresh={() => refreshPoll(pollId)} onAddResponse={() => { window.location.hash = pollId; setView('respond'); }} loading={loading} />;
+    case 'finalize':  return <FinalizeView poll={pollData?.poll} responses={responses} pollId={pollId} onConfirm={finalizePoll} onBack={() => setView('results')} loading={loading} />;
+    case 'error':     return <ErrorView msg={error} onHome={() => { window.location.hash = ''; setView('landing'); }} />;
+    default:          return <LandingView onCreateNew={() => setView('create')} />;
+  }
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+function Header({ onHome }) {
+  return (
+    <div className="flex aic gap3 mb4" style={{marginBottom: 28}}>
+      <div className="hdr" onClick={onHome || (() => { window.location.hash=''; window.location.reload(); })}>
+        <span className="hdr-logo">🍽️</span>
+        <div>
+          <div className="hdr-name">DinnerDate</div>
+          <div className="hdr-tag">Group dinner scheduling, made easy</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   LANDING
+   ============================================================ */
+function LandingView({ onCreateNew, orgId, orgPolls, onRemovePoll, newPollId, onViewResults }) {
+  const dashUrl = orgId ? makeDashboardUrl(orgId) : null;
+  const hasPolls = orgPolls.length > 0;
+
+  return (
+    <div className="page">
+      <Header />
+
+      {/* ── Candlelit banner ────────────────────────── */}
+      <div style={{
+        position:'relative', borderRadius:14, overflow:'hidden',
+        marginBottom:16, height:130, background:'#1a0800',
+      }}>
+        <div style={{
+          position:'absolute', inset:0,
+          backgroundImage:'url(https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1200&q=80)',
+          backgroundSize:'cover', backgroundPosition:'center', opacity:.5,
+        }} />
+        <div style={{
+          position:'absolute', inset:0,
+          background:'linear-gradient(to bottom, rgba(0,0,0,.1) 0%, rgba(0,0,0,.65) 100%)',
+        }} />
+        <div style={{
+          position:'relative', zIndex:1, height:'100%',
+          display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+          color:'#fff', textAlign:'center',
+          fontFamily:"Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif",
+        }}>
+          <div style={{fontSize:11, letterSpacing:'0.18em', textTransform:'uppercase', opacity:.75, marginBottom:6}}>
+            Dinner Group Planner
+          </div>
+          <div style={{fontSize:22, fontWeight:400}}>Plan · Collect · Confirm</div>
+        </div>
+      </div>
+
+      {/* ── Plan a dinner button ─────────────────────── */}
+      <div style={{textAlign:'center', marginBottom:16}}>
+        <button className="btn btn-primary btn-lg" onClick={onCreateNew}>✏️ Plan a dinner</button>
+      </div>
+
+      {/* ── Your Dashboard ───────────────────────────── */}
+      <div className="card">
+        <h3 style={{margin:'0 0 14px 0'}}>Your Dashboard</h3>
+
+        {!hasPolls && (
+          <div style={{textAlign:'center', padding:'24px 0', color:'var(--muted)', fontSize:14}}>
+            No dinners yet — click <strong>Plan a dinner</strong> to get started.
+          </div>
+        )}
+
+        {orgPolls.map((p, i) => {
+          const isNew = p.pollId === newPollId;
+          const guestUrl = makeRespondUrl(p.pollId);
+          const confirmed = !!p.finalDate;
+          return (
+            <div key={p.pollId} style={{
+              borderRadius: 10,
+              border: isNew ? '2px solid var(--green)' : '1px solid var(--border)',
+              background: isNew ? 'var(--green-bg)' : 'transparent',
+              padding: '12px 14px',
+              marginBottom: i < orgPolls.length - 1 ? 10 : 0,
+            }}>
+              {/* Title + × */}
+              <div className="flex aic" style={{gap:8, marginBottom:4}}>
+                <span style={{flex:1, fontWeight:700, fontSize:15, minWidth:0}}>{p.title}
+                  {isNew && <span className="badge bg-green" style={{marginLeft:8, fontSize:11}}>Just created!</span>}
+                </span>
+                <button onClick={() => onRemovePoll(p.pollId)}
+                  style={{background:'none', border:'none', cursor:'pointer', color:'var(--muted)', fontSize:20, lineHeight:1, padding:'0 2px', flexShrink:0}}
+                  title="Remove from list">×</button>
+              </div>
+              {/* Status */}
+              <div style={{fontSize:12, color:'var(--muted)', marginBottom:10}}>
+                {confirmed
+                  ? <span style={{color:'var(--green)', fontWeight:600}}>✓ Confirmed: {fmtShort(p.finalDate)}</span>
+                  : <span>Open · created {p.createdAt}</span>}
+              </div>
+              {/* Actions: copy guest link left, view results right */}
+              <div style={{display:'flex', gap:8, justifyContent:'space-between'}}>
+                {!confirmed
+                  ? <button className="btn btn-primary btn-sm" onClick={() => copyText(guestUrl)}>📨 Copy guest link</button>
+                  : <span />}
+                <button className="btn btn-secondary btn-sm" onClick={() => onViewResults(p.pollId)}>
+                  View results →
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   CREATE POLL
+   ============================================================ */
+function CreateView({ onSubmit, onBack, loading }) {
+  const [step, setStep] = useState(1);
+  const [form, setForm] = useState({ title: '', location: '', notes: '', deadline: '' });
+  const [dates, setDates] = useState([]);
+  const [newDate, setNewDate] = useState('');
+  const [errors, setErrors] = useState({});
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  function step1OK() {
+    const e = {};
+    if (!form.title.trim())    e.title    = 'Please enter a title';
+    setErrors(e);
+    return !Object.keys(e).length;
+  }
+
+  const MAX_DATES = 10;
+
+  function addDate() {
+    if (!newDate) return;
+    if (dates.length >= MAX_DATES) { showToast(`Maximum of ${MAX_DATES} dates allowed`); return; }
+    if (dates.includes(newDate)) { showToast('Already added'); return; }
+    setDates(d => [...d, newDate].sort());
+    setNewDate('');
+  }
+
+  function submit() {
+    if (!dates.length) { showToast('Add at least one date'); return; }
+    onSubmit({ ...form, dates });
+  }
+
+  return (
+    <div className="page">
+      <Header onHome={onBack} />
+      <div className="steps">
+        {[1,2,3].map((s, i) => (
+          <React.Fragment key={s}>
+            {i > 0 && <div className={`sline ${step > i ? 'sline-done' : ''}`} />}
+            <div className={`sdot ${step > s ? 'sdot-done' : step === s ? 'sdot-active' : 'sdot-pending'}`}>
+              {step > s ? '✓' : s}
+            </div>
+          </React.Fragment>
+        ))}
+      </div>
+
+      {step === 1 && (
+        <div className="card">
+          <h2 style={{marginBottom: 20}}>What's the occasion?</h2>
+          <div className="field">
+            <label className="label">Dinner name *</label>
+            <input type="text" placeholder="e.g. Spring dinner with the crew"
+              value={form.title} onChange={e => set('title', e.target.value)}
+              className={errors.title ? 'err' : ''} />
+            {errors.title && <div className="err-msg">{errors.title}</div>}
+          </div>
+          <div className="field">
+            <label className="label">Location or address <span style={{fontWeight:400,color:'var(--muted)'}}>— optional</span></label>
+            <input type="text" placeholder="e.g. Chez Panisse  or  123 Main St"
+              value={form.location} onChange={e => set('location', e.target.value)}
+              className={errors.location ? 'err' : ''} />
+            {errors.location && <div className="err-msg">{errors.location}</div>}
+          </div>
+          <div className="field">
+            <label className="label">Notes for guests <span style={{fontWeight:400, color:'var(--muted)'}}>— optional</span></label>
+            <textarea placeholder="Dress code, parking info, dietary notes…"
+              value={form.notes} onChange={e => set('notes', e.target.value)} rows={3} />
+          </div>
+          <button className="btn btn-primary btn-full" onClick={() => { if (step1OK()) setStep(2); }}>
+            Next: Choose dates →
+          </button>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="card">
+          <div style={{position:'relative',borderRadius:10,overflow:'hidden',marginBottom:20,height:110,background:'#1a0800'}}>
+            <div style={{position:'absolute',inset:0,backgroundImage:'url(https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1200&q=80)',backgroundSize:'cover',backgroundPosition:'center',opacity:.5}} />
+            <div style={{position:'absolute',inset:0,background:'linear-gradient(to bottom, rgba(0,0,0,.1) 0%, rgba(0,0,0,.65) 100%)'}} />
+            <div style={{position:'relative',zIndex:1,height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff',textAlign:'center',fontFamily:"Palatino,'Palatino Linotype','Book Antiqua',Georgia,serif"}}>
+              <div style={{fontSize:11,letterSpacing:'0.18em',textTransform:'uppercase',opacity:.75,marginBottom:5}}>Step 2 of 3</div>
+              <div style={{fontSize:21,fontWeight:400}}>When could you meet?</div>
+            </div>
+          </div>
+          <p style={{marginBottom:20}}>Add 2–5 candidate dates for your guests to vote on.</p>
+          <div className="date-list">
+            {dates.map(d => (
+              <div className="date-chip" key={d}>
+                <span>📅</span>
+                <span>{fmtFull(d)}</span>
+                <button className="rm" onClick={() => setDates(ds => ds.filter(x => x !== d))}>✕</button>
+              </div>
+            ))}
+            {!dates.length && <div style={{color:'var(--muted)',fontSize:14,fontStyle:'italic'}}>No dates added yet</div>}
+          </div>
+          <div className="flex gap2 mb4">
+            <input type="date" value={newDate} min={today()}
+              onChange={e => setNewDate(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addDate()}
+              style={{flex:1}} disabled={dates.length >= MAX_DATES} />
+            <button className="btn btn-secondary" onClick={addDate} disabled={!newDate || dates.length >= MAX_DATES}>Add</button>
+          </div>
+          {dates.length >= MAX_DATES && (
+            <div className="hint" style={{color:'var(--amber)', marginBottom:8}}>Maximum of {MAX_DATES} dates reached.</div>
+          )}
+          <div className="btn-row">
+            <button className="btn btn-ghost" onClick={() => setStep(1)}>← Back</button>
+            <button className="btn btn-primary" onClick={() => { if (!dates.length) { showToast('Add at least one date'); return; } setStep(3); }}>
+              Next: Settings →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="card">
+          <h2 style={{marginBottom: 20}}>Final details</h2>
+          <div className="field">
+            <label className="label">Response deadline <span style={{fontWeight:400,color:'var(--muted)'}}>— optional</span></label>
+            <input type="date" value={form.deadline} min={today()}
+              onChange={e => set('deadline', e.target.value)} />
+            <div className="hint">The poll stays open until you close it or this date passes.</div>
+          </div>
+          <div style={{
+            backgroundImage: 'linear-gradient(rgba(20,10,0,0.52), rgba(20,10,0,0.52)), url(https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1200&q=80)',
+            backgroundSize: 'cover', backgroundPosition: 'center',
+            borderRadius: 14, padding: '20px 22px 22px', marginBottom: 20,
+            color: '#fff',
+            fontFamily: "Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif",
+          }}>
+            <div style={{fontSize:18, fontWeight:600, marginBottom:14, letterSpacing:'0.01em'}}>🍽️ Dinner Date Summary</div>
+            <div style={{fontSize:17, fontWeight:700, marginBottom: form.notes || form.deadline ? 10 : 14}}>{form.title}</div>
+            {form.notes    && <div style={{fontSize:13, opacity:0.82, marginBottom:6}}>📝 {form.notes}</div>}
+            {form.deadline && <div style={{fontSize:13, opacity:0.82, marginBottom:10}}>⏰ Closes {fmtShort(form.deadline)}</div>}
+            <div style={{fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', opacity:0.7, marginBottom:8}}>Date Options</div>
+            {(() => {
+              function weekKey(ds) {
+                const d = new Date(ds + 'T12:00:00');
+                const toSun = d.getDay() === 0 ? 0 : 7 - d.getDay();
+                const sun = new Date(d); sun.setDate(d.getDate() + toSun);
+                return sun.toISOString().slice(0, 10);
+              }
+              const buckets = {}; const order = [];
+              [...dates].sort().forEach(d => {
+                const k = weekKey(d);
+                if (!buckets[k]) { buckets[k] = []; order.push(k); }
+                buckets[k].push(d);
+              });
+              return order.map(k => (
+                <div key={k} style={{display:'flex', flexWrap:'wrap', gap:6, marginBottom:6}}>
+                  {buckets[k].map(d => (
+                    <span key={d} style={{background:'rgba(255,255,255,0.18)', borderRadius:8, padding:'3px 11px', fontSize:14, fontWeight:500}}>
+                      {fmtShort(d)}
+                    </span>
+                  ))}
+                </div>
+              ));
+            })()}
+          </div>
+          <div className="btn-row">
+            <button className="btn btn-ghost" onClick={() => setStep(2)}>← Back</button>
+            <button className="btn btn-primary" onClick={submit} disabled={loading}>
+              {loading ? 'Creating…' : '🎉 Create poll'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   SHARE
+   ============================================================ */
+
+/* ============================================================
+   RESPOND
+   ============================================================ */
+function RespondView({ poll, responses, onSubmit, loading, role, onViewResults }) {
+  const [couple,      setCouple]      = useState('');
+  const [avail,       setAvail]       = useState({});
+  const [notes,       setNotes]       = useState({});
+  const [noteOpen,    setNoteOpen]    = useState(null);
+  const [errors,      setErrors]      = useState({});
+
+  if (!poll) return <div className="page"><Header /><div className="loading-center"><div className="spinner" /></div></div>;
+
+  const isClosed  = poll.closed || (poll.deadline && poll.deadline < today());
+  const alreadyIn = responses.find(r => r.couple?.toLowerCase() === couple.toLowerCase());
+
+  function prefill(name) {
+    // Only overwrite selections if this couple already has a saved response
+    // (so they can edit it). Never clear selections just because the name
+    // doesn't match yet — the user may be typing their name after marking dates.
+    const ex = responses.find(r => r.couple?.toLowerCase() === name.toLowerCase());
+    if (ex) { setAvail(ex.availability || {}); setNotes(ex.notes || {}); }
+  }
+
+  function handleSubmit() {
+    const e = {};
+    if (!couple.trim()) e.couple = 'Please enter your couple name';
+    const unanswered = poll.dates?.filter(d => !avail[d]);
+    if (unanswered?.length) e.avail = 'Please mark your availability for every date';
+    setErrors(e);
+    if (Object.keys(e).length) return;
+    onSubmit(couple.trim(), avail, notes);
+  }
+
+  return (
+    <div className="page">
+      <Header />
+
+      {isClosed && (
+        <div style={{background:'var(--yellow-bg)', border:'2px solid var(--amber-mid)', borderRadius:14, padding:'14px 18px', marginBottom:16}}>
+          <strong>⏰ This poll is closed.</strong> Responses are no longer being accepted.
+        </div>
+      )}
+
+      {/* ── Candlelit banner ────────────────────────── */}
+      <div style={{
+        position:'relative', borderRadius:14, overflow:'hidden',
+        marginBottom:16, height:130, background:'#1a0800',
+      }}>
+        <div style={{
+          position:'absolute', inset:0,
+          backgroundImage:'url(https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1200&q=80)',
+          backgroundSize:'cover', backgroundPosition:'center', opacity:.5,
+        }} />
+        <div style={{
+          position:'absolute', inset:0,
+          background:'linear-gradient(to bottom, rgba(0,0,0,.1) 0%, rgba(0,0,0,.65) 100%)',
+        }} />
+        <div style={{
+          position:'relative', zIndex:1, height:'100%',
+          display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+          color:'#fff', textAlign:'center',
+          fontFamily:"Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif",
+        }}>
+          <div style={{fontSize:11, letterSpacing:'0.18em', textTransform:'uppercase', opacity:.75, marginBottom:6}}>
+            Mark your availability
+          </div>
+          <div style={{fontSize:22, fontWeight:400, marginBottom:4}}>{poll.title}</div>
+          <div style={{fontSize:12, opacity:.75}}>
+            {responses.length} response{responses.length!==1?'s':''}{poll.deadline ? ` · by ${fmtShort(poll.deadline)}` : ''}
+          </div>
+        </div>
+      </div>
+      {poll.notes && (
+        <div className="card" style={{marginBottom:16, fontSize:14, color:'var(--muted)'}}>{poll.notes}</div>
+      )}
+      {(role === 'organize' || role === 'results') && (
+        <div style={{marginBottom:12}}>
+          <button className="btn btn-secondary btn-sm" onClick={onViewResults}>View results →</button>
+        </div>
+      )}
+
+      {!isClosed && (
+        <>
+          <div className="card">
+            <div className="field" style={{marginBottom:0}}>
+              <label className="label">Your couple name *</label>
+              <input type="text" placeholder="e.g. The Johnsons  or  Mike & Sarah"
+                value={couple}
+                onChange={e => { setCouple(e.target.value); prefill(e.target.value); }}
+                className={errors.couple ? 'err' : ''} />
+              {errors.couple && <div className="err-msg">{errors.couple}</div>}
+              {alreadyIn && <div className="hint" style={{color:'var(--amber)'}}>✏️ You've already responded — this will update your answer.</div>}
+            </div>
+          </div>
+
+          {poll.dates?.map(date => (
+            <div className="card" key={date}>
+              <div className="flex aic gap2 wrap" style={{marginBottom:12}}>
+                <h3 className="grow">{fmtFull(date)}</h3>
+                {avail[date] && (
+                  <span className={`badge ${avail[date]==='yes'?'bg-green':avail[date]==='maybe'?'bg-yellow':'bg-red'}`}>
+                    {avail[date]==='yes'?'✓ Available':avail[date]==='maybe'?'~ Maybe':'✗ Unavailable'}
+                  </span>
+                )}
+              </div>
+              <div className="flex gap2 wrap">
+                <button className={`av-btn av-yes ${avail[date]==='yes'?'on':''}`}   onClick={() => setAvail(a=>({...a,[date]:'yes'}))}>✓ Yes</button>
+                <button className={`av-btn av-maybe ${avail[date]==='maybe'?'on':''}`} onClick={() => setAvail(a=>({...a,[date]:'maybe'}))}>~ Maybe</button>
+                <button className={`av-btn av-no ${avail[date]==='no'?'on':''}`}    onClick={() => setAvail(a=>({...a,[date]:'no'}))}>✗ No</button>
+              </div>
+              {avail[date] && (
+                <div style={{marginTop:10}}>
+                  {noteOpen === date ? (
+                    <input type="text" placeholder='Let us know if you can host! Or any notes.'
+                      value={notes[date]||''}
+                      onChange={e => setNotes(n=>({...n,[date]:e.target.value}))}
+                      onBlur={()=>setNoteOpen(null)} autoFocus />
+                  ) : (
+                    <button style={{fontSize:12,color:'var(--muted)',background:'none',border:'none',cursor:'pointer',padding:0}}
+                      onClick={()=>setNoteOpen(date)}>
+                      {notes[date] ? `📝 "${notes[date]}"` : '+ Add a note'}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {errors.avail && (
+            <div style={{background:'var(--red-bg)',color:'var(--red)',borderRadius:9,padding:'10px 14px',fontSize:13,marginBottom:12}}>
+              ⚠️ {errors.avail}
+            </div>
+          )}
+
+          <button className="btn btn-primary btn-full btn-lg" onClick={handleSubmit} disabled={loading}>
+            {loading ? 'Saving…' : 'Submit my availability →'}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   CONFIRMED
+   ============================================================ */
+function ConfirmedView({ poll, pollId, onViewResults }) {
+  if (!poll) return null;
+  return (
+    <div className="page">
+      <Header />
+      <div className="card tc" style={{padding:'40px 24px'}}>
+        <span className="icon-big">✅</span>
+        <h1 style={{marginBottom:8}}>Response saved!</h1>
+        <p style={{maxWidth:360, margin:'0 auto'}}>
+          Your availability for <strong>{poll.title}</strong> has been recorded. Everyone is seeing live results — nothing else needed from you.
+        </p>
+        <div style={{marginTop:24, display:'flex', gap:10, justifyContent:'center', flexWrap:'wrap'}}>
+          <button className="btn btn-primary" onClick={onViewResults}>View poll results →</button>
+          <button className="btn btn-ghost" onClick={() => { window.location.hash = pollId; window.location.reload(); }}>
+            Edit my response
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   RESULTS
+   ============================================================ */
+function ResultsView({ poll, responses, role, pollId, onFinalize, onRefresh, onAddResponse, loading }) {
+  const [lastRefresh, setLastRefresh] = useState(Date.now());
+
+  useEffect(() => { setLastRefresh(Date.now()); }, [responses]);
+
+  if (!poll) return <div className="page"><Header /><div className="loading-center"><div className="spinner" /></div></div>;
+
+  const isOrg = role === 'organize' || role === 'organizer';
+  const analysis = analyzeDates(poll.dates || [], responses);
+  const sorted   = [...analysis].sort((a,b) => b.score - a.score || b.yes - a.yes);
+  const maxScore = Math.max(...analysis.map(a => a.score), 1);
+
+  const bestScore  = sorted[0]?.score || 0;
+  const bestDates  = sorted.filter(a => a.score === bestScore && a.score > 0).map(a => a.date);
+  const fullDates  = analysis.filter(a => a.yes === responses.length && responses.length > 0).map(a => a.date);
+  const noDateFor  = responses.filter(r => poll.dates?.every(d => r.availability?.[d] === 'no' || !r.availability?.[d])).map(r => r.couple);
+  const pendingCouples = responses.filter(r => poll.dates?.some(d => !r.availability?.[d])).map(r => r.couple);
+
+  const t = new Date(lastRefresh).toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+
+  return (
+    <div className="page-wide">
+      <Header />
+
+      {/* ── Candlelit banner (adapts to finalized vs. live) ── */}
+      <div style={{
+        position:'relative', borderRadius:14, overflow:'hidden',
+        marginBottom:16, height: poll.finalDate ? 160 : 130, background:'#1a0800',
+      }}>
+        <div style={{
+          position:'absolute', inset:0,
+          backgroundImage:'url(https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1200&q=80)',
+          backgroundSize:'cover', backgroundPosition:'center', opacity:.5,
+        }} />
+        <div style={{
+          position:'absolute', inset:0,
+          background:'linear-gradient(to bottom, rgba(0,0,0,.1) 0%, rgba(0,0,0,.65) 100%)',
+        }} />
+        <div style={{
+          position:'relative', zIndex:1, height:'100%',
+          display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+          color:'#fff', textAlign:'center',
+          fontFamily:"Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif",
+        }}>
+          {poll.finalDate ? (
+            <>
+              <div style={{fontSize:11, letterSpacing:'0.18em', textTransform:'uppercase', opacity:.75, marginBottom:6}}>
+                🎉 Dinner is confirmed!
+              </div>
+              <div style={{fontSize:24, fontWeight:600, marginBottom:4}}>{fmtFull(poll.finalDate)}</div>
+              <div style={{fontSize:13, opacity:.8}}>{poll.title}</div>
+            </>
+          ) : (
+            <>
+              <div style={{fontSize:11, letterSpacing:'0.18em', textTransform:'uppercase', opacity:.75, marginBottom:6}}>
+                Who can make it?
+              </div>
+              <div style={{fontSize:22, fontWeight:400}}>{poll.title}</div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Title card — only shown when poll is still open */}
+      {!poll.finalDate && (
+        <div className="card mb4">
+          <div className="flex aic gap3 wrap">
+            <div className="grow">
+              <div className="poll-meta">
+                <span className="pm-item">👥 {responses.length} response{responses.length!==1?'s':''}</span>
+                {poll.deadline && <span className="pm-item">⏰ Closes {fmtShort(poll.deadline)}</span>}
+                <span className="pm-item flex aic gap2">
+                  <span className="live-dot" /> Live · updated {t}
+                </span>
+              </div>
+            </div>
+            {isOrg && responses.length > 0 && !poll.closed && (
+              <button className="btn btn-success" onClick={onFinalize}>✓ Finalize date</button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Summary cards */}
+      {responses.length > 0 && (
+        <div className="sum-grid">
+          {fullDates.length > 0 && (
+            <div className="sum-card" style={{border:'2px solid var(--green)', background:'var(--green-bg)'}}>
+              <div style={{fontSize:11,fontWeight:700,color:'var(--green)',marginBottom:4}}>🟢 EVERYONE FREE</div>
+              {fullDates.map(d => <div key={d} style={{fontSize:15,fontWeight:600}}>{fmtShort(d)}</div>)}
+            </div>
+          )}
+          {bestDates.length > 0 && fullDates.length === 0 && (
+            <div className="sum-card" style={{border:'2px solid var(--amber)', background:'var(--amber-light)'}}>
+              <div style={{fontSize:11,fontWeight:700,color:'var(--amber-dark)',marginBottom:4}}>⭐ BEST OPTION</div>
+              {bestDates.map(d => <div key={d} style={{fontSize:15,fontWeight:600}}>{fmtShort(d)}</div>)}
+            </div>
+          )}
+          {noDateFor.length > 0 && (
+            <div className="sum-card" style={{border:'2px solid var(--red)', background:'var(--red-bg)'}}>
+              <div style={{fontSize:11,fontWeight:700,color:'var(--red)',marginBottom:4}}>⚠️ NO DATE WORKS</div>
+              {noDateFor.map(c => <div key={c} style={{fontSize:13,fontWeight:500}}>{c}</div>)}
+            </div>
+          )}
+          <div className="sum-card card-flat" style={{background:'var(--gray-bg)'}}>
+            <div style={{fontSize:11,fontWeight:700,color:'var(--muted)',marginBottom:4}}>📊 RESPONSES</div>
+            <div style={{fontSize:26,fontWeight:700}}>{responses.length}</div>
+            <div style={{fontSize:12,color:'var(--muted)'}}>couple{responses.length!==1?'s':''} responded</div>
+          </div>
+        </div>
+      )}
+
+
+      {/* Grid */}
+      {responses.length > 0 && (
+        <div className="card" style={{padding:'22px 12px'}}>
+          <h2 style={{marginBottom:16, paddingLeft:12}}>Availability grid</h2>
+          <div className="grid-wrap">
+            <table className="rg">
+              <thead>
+                <tr>
+                  <th className="rg-couple">Couple</th>
+                  {poll.dates?.map(d => {
+                    const best = bestDates.includes(d);
+                    return (
+                      <th key={d} className={`rg-dh ${best?'col-best':''}`}>
+                        <div>{fmtMonthDay(d)}</div>
+                        <div className="rg-sub">{new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short'})}</div>
+                        {best && <div className="rg-sub">⭐</div>}
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {responses.map(r => (
+                  <tr key={r.couple}>
+                    <td className="rg-couple">{r.couple}</td>
+                    {poll.dates?.map(d => {
+                      const v = r.availability?.[d];
+                      const n = r.notes?.[d];
+                      const cls = v==='yes'?'cy':v==='maybe'?'cm':v==='no'?'cn':'c0';
+                      const lbl = v==='yes'?'✓ Yes':v==='maybe'?'~ Maybe':v==='no'?'✗ No':'—';
+                      return <td key={d} className={cls}>{lbl}{n&&<span className="cell-note">📝{n}</span>}</td>;
+                    })}
+                  </tr>
+                ))}
+                <tr>
+                  <td className="rg-couple" style={{fontSize:11,fontWeight:700,color:'var(--muted)'}}>TOTAL YES</td>
+                  {poll.dates?.map(d => {
+                    const a = analysis.find(x=>x.date===d);
+                    const pct = responses.length ? Math.round((a.yes + a.maybe*0.5)/responses.length*100) : 0;
+                    return (
+                      <td key={d} style={{
+                        background: pct>=90?'var(--green-bg)':pct>=60?'var(--yellow-bg)':'var(--red-bg)',
+                        fontWeight:700, fontSize:13, padding:'10px 8px'
+                      }}>
+                        {a.yes}/{responses.length}
+                        {a.maybe>0&&<span style={{fontSize:10,display:'block',color:'var(--yellow)'}}>+{a.maybe} Maybe</span>}
+                      </td>
+                    );
+                  })}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="flex gap2 wrap" style={{marginTop:12,paddingLeft:8}}>
+            <span className="badge bg-green">✓ Available</span>
+            <span className="badge bg-yellow">~ Maybe</span>
+            <span className="badge bg-red">✗ No</span>
+            <span className="badge bg-gray">— No response yet</span>
+          </div>
+        </div>
+      )}
+
+      {responses.length === 0 && (
+        <div className="card tc" style={{padding:'44px 24px'}}>
+          <span style={{fontSize:44}}>🕐</span>
+          <h2 style={{margin:'12px 0 8px'}}>Waiting for responses…</h2>
+          <p>Share the poll link with your guests — results appear here the moment anyone responds.</p>
+          <button className="btn btn-secondary mt4" onClick={() => copyText(makeRespondUrl(pollId))}>
+            Copy poll link
+          </button>
+        </div>
+      )}
+
+      <div className="btn-row mt4">
+        <button className="btn btn-ghost" onClick={() => { onRefresh(); showToast('Refreshed'); }}>
+          🔄 Refresh
+        </button>
+        {!poll.closed && (
+          <button className="btn btn-secondary" onClick={onAddResponse}>+ Add / edit a response</button>
+        )}
+        {isOrg && responses.length > 0 && !poll.closed && !poll.finalDate && (
+          <button className="btn btn-success" onClick={onFinalize}>✓ Finalize a date</button>
+        )}
+        {isOrg && poll.finalDate && (
+          <button className="btn btn-primary" onClick={onFinalize}>📋 View confirmation &amp; copy image</button>
+        )}
+      </div>
+
+    </div>
+  );
+}
+
+/* ============================================================
+   FINALIZE  (also shows confirmation after date is locked in)
+   ============================================================ */
+function FinalizeView({ poll, responses, pollId, onConfirm, onBack, loading }) {
+  const [selected, setSelected] = useState(null);
+  const heroRef = useRef(null);
+  if (!poll) return null;
+
+  const palatino = { fontFamily: "Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif" };
+
+  const attending = poll.finalDate
+    ? responses.filter(r => r.availability?.[poll.finalDate] !== 'no')
+    : [];
+
+  async function copyHeroImage() {
+    if (!heroRef.current || typeof html2canvas === 'undefined') {
+      showToast('Image capture not available'); return;
+    }
+    try {
+      showToast('Capturing image…');
+      const canvas = await html2canvas(heroRef.current, { useCORS: true, scale: 2, logging: false });
+      canvas.toBlob(async blob => {
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          showToast('Image copied to clipboard!');
+        } catch {
+          const url = canvas.toDataURL();
+          const a = document.createElement('a'); a.href = url; a.download = 'dinner-confirmation.png'; a.click();
+          showToast('Image downloaded (clipboard blocked)');
+        }
+      }, 'image/png');
+    } catch(e) { showToast('Could not capture image'); }
+  }
+
+  /* ── Date picker / confirmed (same page) ─────── */
+  const analysis = analyzeDates(poll.dates||[], responses);
+  const sorted   = [...analysis].sort((a,b) => b.score-a.score || b.yes-a.yes);
+  const confirmed = !!poll.finalDate;
+
+  return (
+    <div className="page">
+      <Header />
+
+      {/* Off-screen hero — always rendered when confirmed so html2canvas can capture it */}
+      {confirmed && (
+        <div ref={heroRef} style={{
+          position:'fixed', left:'-9999px', top:0, width:600,
+          borderRadius:16, overflow:'hidden', minHeight:216, background:'#1a0800',
+        }}>
+          <div style={{
+            position:'absolute', inset:0,
+            backgroundImage:'url(https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1200&q=80)',
+            backgroundSize:'cover', backgroundPosition:'center', opacity:.55,
+          }} />
+          <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,.15) 0%, rgba(0,0,0,.7) 100%)' }} />
+          <div style={{ position:'relative', zIndex:1, padding:'26px 24px 22px', color:'#fff', textAlign:'center', ...palatino }}>
+            <div style={{fontSize:11, letterSpacing:'0.18em', textTransform:'uppercase', opacity:.8, marginBottom:8}}>You're invited</div>
+            <div style={{fontSize:22, fontWeight:400, lineHeight:1.3, marginBottom:8}}>{poll.title}</div>
+            <div style={{fontSize:15, opacity:.9, marginBottom:4, fontStyle:'italic'}}>{fmtFull(poll.finalDate)}</div>
+            {poll.location && <div style={{fontSize:12, opacity:.75, marginBottom:16}}>📍 {poll.location}</div>}
+            {attending.length > 0 && (
+              <div>
+                <div style={{fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', opacity:.7, marginBottom:8}}>Attending</div>
+                <div style={{display:'flex', flexWrap:'wrap', gap:6, justifyContent:'center'}}>
+                  {attending.map(r => (
+                    <span key={r.couple} style={{
+                      background:'rgba(255,255,255,.2)', border:'1px solid rgba(255,255,255,.35)',
+                      borderRadius:20, padding:'4px 12px', fontSize:13, ...palatino,
+                    }}>
+                      {r.couple}
+                      {r.notes?.[poll.finalDate] && <span style={{fontSize:10,opacity:.8}}> · {r.notes[poll.finalDate]}</span>}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="card">
+        <div style={{position:'relative',borderRadius:10,overflow:'hidden',marginBottom:20,height:110,background:'#1a0800'}}>
+          <div style={{position:'absolute',inset:0,backgroundImage:'url(https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1200&q=80)',backgroundSize:'cover',backgroundPosition:'center',opacity:.5}} />
+          <div style={{position:'absolute',inset:0,background:'linear-gradient(to bottom, rgba(0,0,0,.1) 0%, rgba(0,0,0,.65) 100%)'}} />
+          <div style={{position:'relative',zIndex:1,height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff',textAlign:'center',fontFamily:"Palatino,'Palatino Linotype','Book Antiqua',Georgia,serif"}}>
+            <div style={{fontSize:11,letterSpacing:'0.18em',textTransform:'uppercase',opacity:.75,marginBottom:5}}>
+              {confirmed ? '✅ Date confirmed!' : 'Organizer'}
+            </div>
+            <div style={{fontSize:21,fontWeight:400}}>
+              {confirmed ? fmtFull(poll.finalDate) : 'Choose the dinner date'}
+            </div>
+          </div>
+        </div>
+        {!confirmed && <p style={{marginBottom:22}}>Pick one date to confirm. Everyone will be able to see the decision.</p>}
+
+        {sorted.map((a) => {
+          const allYes     = responses.length > 0 && a.yes === responses.length;
+          const oneMissing = responses.length > 0 && !allYes && (responses.length - a.yes) === 1;
+          const isConfirmed = confirmed && a.date === poll.finalDate;
+          const isSelected  = !confirmed && selected === a.date;
+          const bgStyle = isConfirmed                       ? { background:'var(--green-bg)', border:'2px solid var(--green)' }
+                        : !isSelected && !confirmed && allYes     ? { background:'var(--green-bg)',  border:'2px solid var(--green)' }
+                        : !isSelected && !confirmed && oneMissing ? { background:'var(--yellow-bg)', border:'2px solid var(--amber)' }
+                        : {};
+          return (
+            <div key={a.date} className={`fdc ${isSelected||isConfirmed?'sel':''}`}
+                 style={bgStyle} onClick={()=>{ if (!confirmed) setSelected(a.date); }}>
+              <div className="fdc-radio">{(isSelected||isConfirmed)&&<div className="fdc-dot"/>}</div>
+              <div className="fdc-info">
+                <div className="fdc-date">{fmtFull(a.date)}</div>
+                <div className="fdc-score">
+                  <span style={{color:'var(--green)',fontWeight:600}}>{a.yes} yes</span>
+                  {a.maybe>0&&<span style={{color:'var(--yellow)',fontWeight:600}}> · {a.maybe} maybe</span>}
+                  {a.no>0&&<span style={{color:'var(--red)'}}> · {a.no} no</span>}
+                  {a.none>0&&<span style={{color:'var(--muted)'}}> · {a.none} not yet answered</span>}
+                </div>
+              </div>
+              {isConfirmed && <span className="badge bg-green">✓ Confirmed</span>}
+              {!confirmed && allYes     && <span className="badge bg-green">Everyone free ✓</span>}
+              {!confirmed && oneMissing && <span className="badge bg-yellow">1 missing</span>}
+            </div>
+          );
+        })}
+
+        <hr className="divider" />
+        <div className="btn-row">
+          {confirmed ? (
+            <>
+              <button className="btn btn-ghost" onClick={onBack}>← Back to results</button>
+              <button className="btn btn-primary" onClick={copyHeroImage}>📋 Copy confirmation image</button>
+            </>
+          ) : (
+            <>
+              <button className="btn btn-ghost" onClick={onBack}>← Back</button>
+              <button className="btn btn-success" disabled={!selected||loading} onClick={()=>onConfirm(selected)}>
+                {loading ? 'Saving…' : '🎉 Confirm this date'}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   ERROR
+   ============================================================ */
+function ErrorView({ msg, onHome }) {
+  return (
+    <div className="page">
+      <Header />
+      <div className="card tc" style={{padding:'40px 24px'}}>
+        <span style={{fontSize:48}}>⚠️</span>
+        <h2 style={{margin:'12px 0 10px'}}>Something went wrong</h2>
+        <p style={{marginBottom:22, maxWidth:360, margin:'0 auto 22px'}}>{msg}</p>
+        <button className="btn btn-primary" onClick={onHome}>← Home</button>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   BOOTSTRAP
+   ============================================================ */
+
+// Show a persistent banner if opened as a local file (file://)
+// because share links won't work for other people.
+function FileWarningBanner() {
+  const [dismissed, setDismissed] = useState(false);
+  if (dismissed || window.location.protocol !== 'file:') return null;
+  return (
+    <div style={{
+      position:'fixed', top:0, left:0, right:0, zIndex:9000,
+      background:'#1e40af', color:'#fff', padding:'12px 20px',
+      display:'flex', alignItems:'flex-start', gap:14, fontSize:14, lineHeight:1.5
+    }}>
+      <span style={{fontSize:20, flexShrink:0}}>⚠️</span>
+      <div style={{flex:1}}>
+        <strong>You're running DinnerDate as a local file</strong> — share links won't work for your
+        guests because the URL starts with <code style={{background:'rgba(255,255,255,.2)',padding:'1px 5px',borderRadius:4}}>file://</code>.
+        To share with others you need to host this file online. The easiest free option is{' '}
+        <a href="https://app.netlify.com/drop" target="_blank"
+           style={{color:'#93c5fd', fontWeight:600}}>Netlify Drop</a>:
+        just drag &amp; drop <strong>dinnerdate.html</strong> onto that page and you'll get
+        a public URL in seconds — no account needed.
+      </div>
+      <button onClick={() => setDismissed(true)}
+        style={{background:'none',border:'none',color:'#93c5fd',fontSize:20,cursor:'pointer',flexShrink:0,lineHeight:1}}>✕</button>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <>
+    <FileWarningBanner />
+    <App />
+  </>
+);
+</script>
+</body>
+</html>
