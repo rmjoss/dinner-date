@@ -1257,18 +1257,25 @@ function FinalizeView({ poll, responses, pollId, onConfirm, onBack, loading }) {
     }
     try {
       showToast('Capturing image…');
-      const canvas = await html2canvas(heroRef.current, { useCORS: true, scale: 2, logging: false });
+      const canvas = await html2canvas(heroRef.current, { useCORS: true, allowTaint: false, scale: 2, logging: false });
       canvas.toBlob(async blob => {
+        if (!blob) { showToast('Image capture failed'); return; }
         try {
           await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-          showToast('Image copied to clipboard!');
+          showToast('✅ Image copied to clipboard!');
         } catch {
-          const url = canvas.toDataURL();
-          const a = document.createElement('a'); a.href = url; a.download = 'dinner-confirmation.png'; a.click();
-          showToast('Image downloaded (clipboard blocked)');
+          // Clipboard blocked — download instead
+          const url = canvas.toDataURL('image/png');
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'dinner-confirmation.png';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          showToast('📥 Image saved — check your Downloads!');
         }
       }, 'image/png');
-    } catch(e) { showToast('Could not capture image'); }
+    } catch(e) { showToast('Could not capture image: ' + e.message); }
   }
 
   /* ── Date picker / confirmed (same page) ─────── */
@@ -1286,11 +1293,11 @@ function FinalizeView({ poll, responses, pollId, onConfirm, onBack, loading }) {
           position:'fixed', left:'-9999px', top:0, width:600,
           borderRadius:16, overflow:'hidden', minHeight:216, background:'#1a0800',
         }}>
-          <div style={{
-            position:'absolute', inset:0,
-            backgroundImage:'url(https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1200&q=80)',
-            backgroundSize:'cover', backgroundPosition:'center', opacity:.55,
-          }} />
+          <img
+            src="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1200&q=80"
+            crossOrigin="anonymous"
+            style={{position:'absolute', top:0, left:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'center', opacity:.55}}
+          />
           <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,.15) 0%, rgba(0,0,0,.7) 100%)' }} />
           <div style={{ position:'relative', zIndex:1, padding:'26px 24px 22px', color:'#fff', textAlign:'center', ...palatino }}>
             <div style={{fontSize:11, letterSpacing:'0.18em', textTransform:'uppercase', opacity:.8, marginBottom:8}}>You're invited</div>
