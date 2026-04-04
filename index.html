@@ -532,19 +532,20 @@ function App() {
     setLoading(false);
   }
 
-  async function finalizePoll(finalDate) {
+  async function finalizePoll(finalDatesArg) {
+    // finalDatesArg may be a single string (legacy) or an array of 1-2 date strings
+    const finalDates = Array.isArray(finalDatesArg) ? finalDatesArg : [finalDatesArg];
+    const finalDate  = finalDates[0]; // keep for backward compat
     setLoading(true);
     try {
-      await fbPatch(`polls/${pollId}/poll`, { finalDate, closed: true });
+      await fbPatch(`polls/${pollId}/poll`, { finalDates, finalDate, closed: true });
       const data = await fbGet(`polls/${pollId}`);
       setPollData(data);
-      // Update organizer index with confirmed date
       const oid = orgId || localStorage.getItem('dinnerOrgId');
       if (oid && pollId) {
         await fbPatch(`organizers/${oid}/polls/${pollId}`, { finalDate });
         setOrgPolls(prev => prev.map(p => p.pollId === pollId ? { ...p, finalDate } : p));
       }
-      // stay on 'finalize' view; component will detect poll.finalDate and show confirmation
     } catch (e) {
       setError('Could not finalize poll. ' + e.message);
     }
@@ -563,7 +564,7 @@ function App() {
     case 'create':    return <CreateView onSubmit={createPoll} onBack={() => setView('landing')} loading={loading} />;
     case 'respond':   return <RespondView poll={pollData?.poll} responses={responses} onSubmit={submitResponse} loading={loading} role={role} onViewResults={() => setView('results')} />;
     case 'confirmed': return <ConfirmedView poll={pollData?.poll} pollId={pollId} onViewResults={() => { window.location.hash = `${pollId}/results`; setView('results'); }} />;
-    case 'results':   return <ResultsView poll={pollData?.poll} responses={responses} role={role} pollId={pollId} onFinalize={() => setView('finalize')} onRefresh={() => refreshPoll(pollId)} onAddResponse={() => { window.location.hash = pollId; setView('respond'); }} loading={loading} />;
+    case 'results':   return <ResultsView poll={pollData?.poll} responses={responses} role={role} pollId={pollId} onFinalize={() => setView('finalize')} onConfirmDate={(dates) => finalizePoll(dates)} onRefresh={() => refreshPoll(pollId)} onAddResponse={() => { window.location.hash = pollId; setView('respond'); }} loading={loading} />;
     case 'finalize':  return <FinalizeView poll={pollData?.poll} responses={responses} pollId={pollId} onConfirm={finalizePoll} onBack={() => setView('results')} loading={loading} />;
     case 'error':     return <ErrorView msg={error} onHome={() => { window.location.hash = ''; setView('landing'); }} />;
     default:          return <LandingView onCreateNew={() => setView('create')} />;
@@ -703,7 +704,7 @@ function CreateView({ onSubmit, onBack, loading }) {
     return !Object.keys(e).length;
   }
 
-  const MAX_DATES = 10;
+  const MAX_DATES = 16;
 
   function addDate() {
     if (!newDate) return;
@@ -741,13 +742,6 @@ function CreateView({ onSubmit, onBack, loading }) {
               value={form.title} onChange={e => set('title', e.target.value)}
               className={errors.title ? 'err' : ''} />
             {errors.title && <div className="err-msg">{errors.title}</div>}
-          </div>
-          <div className="field">
-            <label className="label">Location or address <span style={{fontWeight:400,color:'var(--muted)'}}>— optional</span></label>
-            <input type="text" placeholder="e.g. Chez Panisse  or  123 Main St"
-              value={form.location} onChange={e => set('location', e.target.value)}
-              className={errors.location ? 'err' : ''} />
-            {errors.location && <div className="err-msg">{errors.location}</div>}
           </div>
           <div className="field">
             <label className="label">Notes for guests <span style={{fontWeight:400, color:'var(--muted)'}}>— optional</span></label>
@@ -1032,8 +1026,12 @@ function ConfirmedView({ poll, pollId, onViewResults }) {
 /* ============================================================
    RESULTS
    ============================================================ */
-function ResultsView({ poll, responses, role, pollId, onFinalize, onRefresh, onAddResponse, loading }) {
+function ResultsView({ poll, responses, role, pollId, onFinalize, onConfirmDate, onRefresh, onAddResponse, loading }) {
   const [lastRefresh, setLastRefresh] = useState(Date.now());
+  const [selectedDates, setSelectedDates] = useState([]);
+  const toggleDate = d => setSelectedDates(prev =>
+    prev.includes(d) ? prev.filter(x => x !== d) : prev.length < 2 ? [...prev, d] : prev
+  );
 
   useEffect(() => { setLastRefresh(Date.now()); }, [responses]);
 
@@ -1049,6 +1047,9 @@ function ResultsView({ poll, responses, role, pollId, onFinalize, onRefresh, onA
   const fullDates  = analysis.filter(a => a.yes === responses.length && responses.length > 0).map(a => a.date);
   const noDateFor  = responses.filter(r => poll.dates?.every(d => r.availability?.[d] === 'no' || !r.availability?.[d])).map(r => r.couple);
   const pendingCouples = responses.filter(r => poll.dates?.some(d => !r.availability?.[d])).map(r => r.couple);
+  // Normalise: old polls store finalDate (string), new ones store finalDates (array)
+  const confirmedDates = poll.finalDates || (poll.finalDate ? [poll.finalDate] : []);
+  const isConfirmed = confirmedDates.length > 0;
 
   const t = new Date(lastRefresh).toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
 
@@ -1059,7 +1060,7 @@ function ResultsView({ poll, responses, role, pollId, onFinalize, onRefresh, onA
       {/* ── Candlelit banner (adapts to finalized vs. live) ── */}
       <div style={{
         position:'relative', borderRadius:14, overflow:'hidden',
-        marginBottom:16, height: poll.finalDate ? 160 : 130, background:'#1a0800',
+        marginBottom:16, height: isConfirmed ? 160 : 130, background:'#1a0800',
       }}>
         <div style={{
           position:'absolute', inset:0,
@@ -1076,13 +1077,17 @@ function ResultsView({ poll, responses, role, pollId, onFinalize, onRefresh, onA
           color:'#fff', textAlign:'center',
           fontFamily:"Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif",
         }}>
-          {poll.finalDate ? (
+          {isConfirmed ? (
             <>
               <div style={{fontSize:11, letterSpacing:'0.18em', textTransform:'uppercase', opacity:.75, marginBottom:6}}>
                 🎉 Dinner is confirmed!
               </div>
-              <div style={{fontSize:24, fontWeight:600, marginBottom:4}}>{fmtFull(poll.finalDate)}</div>
-              <div style={{fontSize:13, opacity:.8}}>{poll.title}</div>
+              {confirmedDates.map((d, i) => (
+                <div key={d} style={{fontSize: confirmedDates.length > 1 ? 20 : 24, fontWeight:600, marginBottom:2}}>
+                  {confirmedDates.length > 1 ? `Option ${i+1}: ` : ''}{fmtFull(d)}
+                </div>
+              ))}
+              <div style={{fontSize:13, opacity:.8, marginTop:4}}>{poll.title}</div>
             </>
           ) : (
             <>
@@ -1096,7 +1101,7 @@ function ResultsView({ poll, responses, role, pollId, onFinalize, onRefresh, onA
       </div>
 
       {/* Title card — only shown when poll is still open */}
-      {!poll.finalDate && (
+      {!isConfirmed && (
         <div className="card mb4">
           <div className="flex aic gap3 wrap">
             <div className="grow">
@@ -1108,8 +1113,8 @@ function ResultsView({ poll, responses, role, pollId, onFinalize, onRefresh, onA
                 </span>
               </div>
             </div>
-            {isOrg && responses.length > 0 && !poll.closed && (
-              <button className="btn btn-success" onClick={onFinalize}>✓ Finalize date</button>
+            {isOrg && isConfirmed && (
+              <span style={{fontSize:13, color:'var(--green)', fontWeight:600}}>✅ Date confirmed</span>
             )}
           </div>
         </div>
@@ -1145,19 +1150,74 @@ function ResultsView({ poll, responses, role, pollId, onFinalize, onRefresh, onA
       )}
 
 
+      {/* Inline confirm banner — shown when organizer has checked 1 or 2 dates */}
+      {isOrg && selectedDates.length > 0 && !isConfirmed && (
+        <div style={{
+          background:'var(--green-bg)', border:'2px solid var(--green)',
+          borderRadius:12, padding:'14px 18px', marginBottom:14,
+          display:'flex', alignItems:'center', gap:14, flexWrap:'wrap',
+        }}>
+          <span style={{flex:1, fontWeight:600, color:'var(--green)', fontSize:15}}>
+            ✓ {selectedDates.length === 1
+              ? fmtFull(selectedDates[0])
+              : `${fmtFull(selectedDates[0])}  or  ${fmtFull(selectedDates[1])}`}
+          </span>
+          <button className="btn btn-ghost btn-sm" onClick={() => setSelectedDates([])}>
+            Cancel
+          </button>
+          <button className="btn btn-success" disabled={loading}
+            onClick={async () => {
+              // One name-list per date so the image can show two columns
+              const namesByDate = selectedDates.map(d =>
+                responses.filter(r => r.availability?.[d] !== 'no').map(r => r.couple)
+              );
+              await onConfirmDate(selectedDates);
+              generateConfirmImage(poll.title, selectedDates, namesByDate);
+            }}>
+            {loading ? 'Saving…' : '🎉 Confirm & copy image'}
+          </button>
+        </div>
+      )}
+
       {/* Grid */}
       {responses.length > 0 && (
         <div className="card" style={{padding:'22px 12px'}}>
-          <h2 style={{marginBottom:16, paddingLeft:12}}>Availability grid</h2>
+          <div style={{paddingLeft:12, marginBottom:16}}>
+            <div style={{fontSize:11, fontWeight:700, color:'var(--muted)', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:4}}>Availability grid</div>
+            {isOrg && !isConfirmed && !poll.closed && (
+              <div style={{fontSize:17, fontWeight:600, color:'var(--text)'}}>
+                👇 Check up to 2 dates below — then hit <span style={{color:'var(--green)'}}>Confirm & copy image</span>
+              </div>
+            )}
+            {isConfirmed && (
+              <div style={{fontSize:17, fontWeight:600, color:'var(--green)'}}>
+                ✅ {confirmedDates.length > 1
+                  ? `Dates confirmed — ${confirmedDates.map(fmtFull).join('  or  ')}`
+                  : `Date confirmed — ${fmtFull(confirmedDates[0])}`}
+              </div>
+            )}
+          </div>
           <div className="grid-wrap">
             <table className="rg">
               <thead>
                 <tr>
-                  <th className="rg-couple">Couple</th>
+                  <th className="rg-couple">Respondent</th>
                   {poll.dates?.map(d => {
                     const best = bestDates.includes(d);
                     return (
                       <th key={d} className={`rg-dh ${best?'col-best':''}`}>
+                        {isOrg && !isConfirmed && !poll.closed && (
+                          <div style={{marginBottom:4}}>
+                            <input
+                              type="checkbox"
+                              checked={selectedDates.includes(d)}
+                              onChange={() => toggleDate(d)}
+                              disabled={!selectedDates.includes(d) && selectedDates.length >= 2}
+                              style={{cursor:'pointer', accentColor:'var(--green)', width:16, height:16}}
+                              title={selectedDates.length >= 2 && !selectedDates.includes(d) ? 'Max 2 dates' : `Select ${fmtShort(d)}`}
+                            />
+                          </div>
+                        )}
                         <div>{fmtMonthDay(d)}</div>
                         <div className="rg-sub">{new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short'})}</div>
                         {best && <div className="rg-sub">⭐</div>}
@@ -1218,23 +1278,228 @@ function ResultsView({ poll, responses, role, pollId, onFinalize, onRefresh, onA
         </div>
       )}
 
-      <div className="btn-row mt4">
-        <button className="btn btn-ghost" onClick={() => { onRefresh(); showToast('Refreshed'); }}>
-          🔄 Refresh
-        </button>
-        {!poll.closed && (
-          <button className="btn btn-secondary" onClick={onAddResponse}>+ Add / edit a response</button>
-        )}
-        {isOrg && responses.length > 0 && !poll.closed && !poll.finalDate && (
-          <button className="btn btn-success" onClick={onFinalize}>✓ Finalize a date</button>
-        )}
-        {isOrg && poll.finalDate && (
-          <button className="btn btn-primary" onClick={onFinalize}>📋 View confirmation &amp; copy image</button>
-        )}
-      </div>
+      {isConfirmed ? (
+        <div className="btn-row mt4">
+          <button className="btn btn-primary" onClick={() => { window.location.hash = ''; window.location.reload(); }}>
+            + Start a new poll
+          </button>
+        </div>
+      ) : (
+        <div className="btn-row mt4">
+          <button className="btn btn-ghost" onClick={() => { onRefresh(); showToast('Refreshed'); }}>
+            🔄 Refresh
+          </button>
+          {!poll.closed && (
+            <button className="btn btn-secondary" onClick={onAddResponse}>+ Add / edit a response</button>
+          )}
+        </div>
+      )}
 
     </div>
   );
+}
+
+/* ============================================================
+   SHARED: generate confirmation image and copy/download it
+   dates may be a single string or an array of 1-2 strings
+   ============================================================ */
+async function generateConfirmImage(title, datesArg, namesArg) {
+    try {
+      showToast('Creating image…');
+      const dates = Array.isArray(datesArg) ? datesArg : [datesArg];
+      // namesArg is either string[] (single date) or string[][] (one per date)
+      const namesByDate = dates.length > 1 && Array.isArray(namesArg[0])
+        ? namesArg
+        : [Array.isArray(namesArg) ? namesArg : []];
+
+      const twoCol = dates.length > 1;
+      const W   = twoCol ? 520 : 420;
+      const PAD = 18;
+      const PHOTO = 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1100&q=80';
+
+      // ── Helper: estimate pill rows inside a column of given width ──
+      function pillRowCount(names, colW) {
+        let rows = 1, used = 0;
+        names.forEach(n => {
+          const pw = ctx0.measureText(n).width + 20;
+          if (used + pw + 6 > colW && used > 0) { rows++; used = 0; }
+          used += pw + 6;
+        });
+        return names.length > 0 ? rows : 0;
+      }
+      // Temporary context just for measuring text before canvas is created
+      const ctx0 = document.createElement('canvas').getContext('2d');
+      ctx0.font = '400 13px Palatino, "Palatino Linotype", Georgia, serif';
+
+      // ── Header area (shared) ──
+      const HEADER_H = 26 + 16 + 15 + 6 + 10 + 14; // YOU'RE INVITED + title + divider + date
+      // ── Column area ──
+      const colW = twoCol ? Math.floor((W - PAD*2 - 10) / 2) : (W - PAD*2);
+      const colRows0 = pillRowCount(namesByDate[0] || [], colW);
+      const colRows1 = twoCol ? pillRowCount(namesByDate[1] || [], colW) : 0;
+      const maxColRows = Math.max(colRows0, colRows1, 0);
+      const COL_H = maxColRows > 0 ? (10 + 10 + maxColRows * 22 + 10) : 0; // ATTENDING label + pills
+      // single-date extra col header (date + ATTENDING) already in HEADER for single col
+      const TWO_COL_HEADER = twoCol ? (14 + 14 + 10) : 0; // date italic + attending label per column
+      const H = HEADER_H + (twoCol ? TWO_COL_HEADER + COL_H : COL_H) + PAD;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = W * 2; canvas.height = H * 2;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(2, 2);
+
+      // ── Try to draw the real candlelight photo as background ──
+      let photoLoaded = false;
+      try {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = PHOTO; });
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(0, 0, W, H, 14);
+        ctx.clip();
+        const scale = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+        const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale;
+        ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+        ctx.restore();
+        photoLoaded = true;
+      } catch(_) {}
+
+      if (!photoLoaded) {
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, '#2a0e00'); bg.addColorStop(1, '#0f0500');
+        ctx.fillStyle = bg; ctx.roundRect(0, 0, W, H, 14); ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(10,4,0,0.58)'; ctx.roundRect(0, 0, W, H, 14); ctx.fill();
+      const vg = ctx.createRadialGradient(W/2, H/2, H*0.15, W/2, H/2, H*0.9);
+      vg.addColorStop(0, 'rgba(160,60,0,0.22)'); vg.addColorStop(1, 'rgba(0,0,0,0.35)');
+      ctx.fillStyle = vg; ctx.roundRect(0, 0, W, H, 14); ctx.fill();
+
+      // Gold top rule
+      ctx.fillStyle = 'rgba(212,175,80,0.55)';
+      ctx.fillRect(PAD, 14, W - PAD*2, 1);
+
+      let y = 26;
+
+      // "YOU'RE INVITED"
+      ctx.font = '500 9px Georgia, serif';
+      ctx.fillStyle = 'rgba(212,175,80,0.85)';
+      ctx.textAlign = 'center';
+      ctx.letterSpacing = '0.18em';
+      ctx.fillText("YOU'RE INVITED", W/2, y);
+      y += 16;
+
+      // Poll title
+      ctx.font = `400 ${title.length > 28 ? 13 : 15}px Palatino, "Palatino Linotype", Georgia, serif`;
+      ctx.fillStyle = '#ffffff'; ctx.letterSpacing = '0px';
+      ctx.fillText(title, W/2, y);
+      y += 6;
+
+      // Thin centre divider
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.fillRect(W/2 - 40, y + 3, 80, 1);
+      y += 10;
+
+      // ── SINGLE-DATE layout ──────────────────────────────────────
+      if (!twoCol) {
+        ctx.font = 'italic 400 11px Palatino, "Palatino Linotype", Georgia, serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
+        ctx.fillText(fmtFull(dates[0]), W/2, y);
+        y += 14;
+        const names = namesByDate[0] || [];
+        if (names.length > 0) {
+          ctx.font = '400 8px -apple-system, sans-serif';
+          ctx.fillStyle = 'rgba(212,175,80,0.7)';
+          ctx.letterSpacing = '0.12em';
+          ctx.fillText('ATTENDING', W/2, y);
+          y += 10;
+          ctx.font = '400 13px Palatino, "Palatino Linotype", Georgia, serif';
+          ctx.letterSpacing = '0px';
+          let rx = PAD, ry = y;
+          names.forEach(name => {
+            const tw = ctx.measureText(name).width, pw = tw + 20;
+            if (rx + pw > W - PAD && rx > PAD) { rx = PAD; ry += 22; }
+            ctx.fillStyle = 'rgba(255,255,255,0.13)';
+            ctx.beginPath(); ctx.roundRect(rx, ry-11, pw, 18, 9); ctx.fill();
+            ctx.strokeStyle = 'rgba(255,255,255,0.28)'; ctx.lineWidth = 0.5;
+            ctx.beginPath(); ctx.roundRect(rx, ry-11, pw, 18, 9); ctx.stroke();
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(name, rx + pw/2, ry+3);
+            rx += pw + 6;
+          });
+        }
+
+      // ── TWO-DATE side-by-side layout ────────────────────────────
+      } else {
+        // Vertical gold divider
+        ctx.fillStyle = 'rgba(212,175,80,0.35)';
+        ctx.fillRect(W/2, y, 1, H - y - PAD/2);
+
+        const drawColumn = (colIdx, cx) => {
+          const names = namesByDate[colIdx] || [];
+          let cy = y;
+          ctx.textAlign = 'center';
+
+          // Date header for this column
+          ctx.font = 'italic 400 11px Palatino, "Palatino Linotype", Georgia, serif';
+          ctx.fillStyle = 'rgba(255,255,255,0.92)';
+          ctx.letterSpacing = '0px';
+          ctx.fillText(fmtFull(dates[colIdx]), cx, cy);
+          cy += 14;
+
+          // ATTENDING label
+          ctx.font = '400 8px -apple-system, sans-serif';
+          ctx.fillStyle = 'rgba(212,175,80,0.7)';
+          ctx.letterSpacing = '0.12em';
+          ctx.fillText('ATTENDING', cx, cy);
+          cy += 10;
+
+          if (names.length === 0) {
+            ctx.font = 'italic 400 10px Georgia, serif';
+            ctx.fillStyle = 'rgba(255,255,255,0.45)';
+            ctx.letterSpacing = '0px';
+            ctx.fillText('none yet', cx, cy);
+            return;
+          }
+
+          ctx.font = '400 13px Palatino, "Palatino Linotype", Georgia, serif';
+          ctx.letterSpacing = '0px';
+          const colLeft = colIdx === 0 ? PAD : W/2 + 6;
+          const colRight = colIdx === 0 ? W/2 - 6 : W - PAD;
+          let rx = colLeft, ry = cy;
+          names.forEach(name => {
+            const tw = ctx.measureText(name).width, pw = tw + 16;
+            if (rx + pw > colRight && rx > colLeft) { rx = colLeft; ry += 22; }
+            ctx.fillStyle = 'rgba(255,255,255,0.13)';
+            ctx.beginPath(); ctx.roundRect(rx, ry-10, pw, 17, 8); ctx.fill();
+            ctx.strokeStyle = 'rgba(255,255,255,0.28)'; ctx.lineWidth = 0.5;
+            ctx.beginPath(); ctx.roundRect(rx, ry-10, pw, 17, 8); ctx.stroke();
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.fillText(name, rx + pw/2, ry+2);
+            rx += pw + 6;
+          });
+        };
+
+        drawColumn(0, PAD + colW/2);
+        drawColumn(1, W/2 + 6 + colW/2);
+      }
+
+      // Try clipboard first, fall back to download
+      canvas.toBlob(async blob => {
+        if (!blob) { showToast('Image creation failed'); return; }
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          showToast('✅ Image copied to clipboard!');
+        } catch {
+          const url = canvas.toDataURL('image/png');
+          const a = document.createElement('a');
+          a.href = url; a.download = 'dinner-confirmation.png';
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          showToast('📥 Image saved — check your Downloads!');
+        }
+      }, 'image/png');
+    } catch(e) { showToast('Error: ' + e.message); }
 }
 
 /* ============================================================
@@ -1242,41 +1507,7 @@ function ResultsView({ poll, responses, role, pollId, onFinalize, onRefresh, onA
    ============================================================ */
 function FinalizeView({ poll, responses, pollId, onConfirm, onBack, loading }) {
   const [selected, setSelected] = useState(null);
-  const heroRef = useRef(null);
   if (!poll) return null;
-
-  const palatino = { fontFamily: "Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif" };
-
-  const attending = poll.finalDate
-    ? responses.filter(r => r.availability?.[poll.finalDate] !== 'no')
-    : [];
-
-  async function copyHeroImage() {
-    if (!heroRef.current || typeof html2canvas === 'undefined') {
-      showToast('Image capture not available'); return;
-    }
-    try {
-      showToast('Capturing image…');
-      const canvas = await html2canvas(heroRef.current, { useCORS: true, allowTaint: false, scale: 2, logging: false });
-      canvas.toBlob(async blob => {
-        if (!blob) { showToast('Image capture failed'); return; }
-        try {
-          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-          showToast('✅ Image copied to clipboard!');
-        } catch {
-          // Clipboard blocked — download instead
-          const url = canvas.toDataURL('image/png');
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = 'dinner-confirmation.png';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          showToast('📥 Image saved — check your Downloads!');
-        }
-      }, 'image/png');
-    } catch(e) { showToast('Could not capture image: ' + e.message); }
-  }
 
   /* ── Date picker / confirmed (same page) ─────── */
   const analysis = analyzeDates(poll.dates||[], responses);
@@ -1287,42 +1518,7 @@ function FinalizeView({ poll, responses, pollId, onConfirm, onBack, loading }) {
     <div className="page">
       <Header />
 
-      {/* Off-screen hero — always rendered when confirmed so html2canvas can capture it */}
-      {confirmed && (
-        <div ref={heroRef} style={{
-          position:'fixed', left:'-9999px', top:0, width:600,
-          borderRadius:16, overflow:'hidden', minHeight:216, background:'#1a0800',
-        }}>
-          <img
-            src="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1200&q=80"
-            crossOrigin="anonymous"
-            style={{position:'absolute', top:0, left:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'center', opacity:.55}}
-          />
-          <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,.15) 0%, rgba(0,0,0,.7) 100%)' }} />
-          <div style={{ position:'relative', zIndex:1, padding:'26px 24px 22px', color:'#fff', textAlign:'center', ...palatino }}>
-            <div style={{fontSize:11, letterSpacing:'0.18em', textTransform:'uppercase', opacity:.8, marginBottom:8}}>You're invited</div>
-            <div style={{fontSize:22, fontWeight:400, lineHeight:1.3, marginBottom:8}}>{poll.title}</div>
-            <div style={{fontSize:15, opacity:.9, marginBottom:4, fontStyle:'italic'}}>{fmtFull(poll.finalDate)}</div>
-            {poll.location && <div style={{fontSize:12, opacity:.75, marginBottom:16}}>📍 {poll.location}</div>}
-            {attending.length > 0 && (
-              <div>
-                <div style={{fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', opacity:.7, marginBottom:8}}>Attending</div>
-                <div style={{display:'flex', flexWrap:'wrap', gap:6, justifyContent:'center'}}>
-                  {attending.map(r => (
-                    <span key={r.couple} style={{
-                      background:'rgba(255,255,255,.2)', border:'1px solid rgba(255,255,255,.35)',
-                      borderRadius:20, padding:'4px 12px', fontSize:13, ...palatino,
-                    }}>
-                      {r.couple}
-                      {r.notes?.[poll.finalDate] && <span style={{fontSize:10,opacity:.8}}> · {r.notes[poll.finalDate]}</span>}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {/* hero ref no longer needed — image drawn via Canvas API */}
 
       <div className="card">
         <div style={{position:'relative',borderRadius:10,overflow:'hidden',marginBottom:20,height:110,background:'#1a0800'}}>
@@ -1373,7 +1569,13 @@ function FinalizeView({ poll, responses, pollId, onConfirm, onBack, loading }) {
           {confirmed ? (
             <>
               <button className="btn btn-ghost" onClick={onBack}>← Back to results</button>
-              <button className="btn btn-primary" onClick={copyHeroImage}>📋 Copy confirmation image</button>
+              <button className="btn btn-primary" onClick={() => {
+                const finalDatesArr = poll.finalDates || (poll.finalDate ? [poll.finalDate] : []);
+                const namesByDate = finalDatesArr.map(d =>
+                  responses.filter(r => r.availability?.[d] !== 'no').map(r => r.couple)
+                );
+                generateConfirmImage(poll.title, finalDatesArr, namesByDate);
+              }}>📋 Copy confirmation image</button>
             </>
           ) : (
             <>
